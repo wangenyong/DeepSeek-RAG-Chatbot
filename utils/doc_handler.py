@@ -9,11 +9,11 @@ import os
 import jieba
 from langchain_core.documents import Document
 from langchain.text_splitter import SpacyTextSplitter
-from text2vec import SentenceModel
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 
 
-def process_documents(uploaded_files, reranker, embedding_model, base_url):
+def process_documents(uploaded_files, reranker, embedding_model, device):
     if st.session_state.documents_loaded:
         return
 
@@ -62,7 +62,11 @@ def process_documents(uploaded_files, reranker, embedding_model, base_url):
     text_contents = [doc.page_content for doc in texts]
 
     # 🚀 中文嵌入模型
-    embeddings = SentenceModel('shibing624/text2vec-base-chinese')
+    embeddings = HuggingFaceEmbeddings(
+        model_name=embedding_model,
+        model_kwargs={'device': device},
+        encode_kwargs={'normalize_embeddings': True}
+    )
     
     # 向量存储
     vector_store = FAISS.from_documents(texts, embeddings)

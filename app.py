@@ -1,33 +1,47 @@
 import streamlit as st
 import requests
 import json
+import jieba  # 🌟 新增中文分词
+import re
 from utils.retriever_pipeline import retrieve_documents
 from utils.doc_handler import process_documents
+from text2vec import SentenceModel  # 🌟 替换为中文优化模型
 from sentence_transformers import CrossEncoder
 import torch
 import os
 from dotenv import load_dotenv, find_dotenv
-torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]  # Fix for torch classes not found error
-load_dotenv(find_dotenv())  # Loads .env file contents into the application based on key-value pairs defined therein, making them accessible via 'os' module functions like os.getenv().
+
+# 🌟 中文停用词表
+STOP_WORDS = set(["的", "了", "在", "是", "和", "就", "不", "人", "都", "一个", "这个"])
+
+torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]
+load_dotenv(find_dotenv())
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 OLLAMA_API_URL = f"{OLLAMA_BASE_URL}/api/generate"
-MODEL= os.getenv("MODEL", "deepseek-r1:7b")                                                      #Make sure you have it installed in ollama
-EMBEDDINGS_MODEL = "nomic-embed-text:latest"
-CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+MODEL = os.getenv("MODEL", "deepseek-r1:1.5b")  # 🌟 改用中文模型
+EMBEDDINGS_MODEL = "moka-ai/m3e-base"  # 🌟 中文嵌入模型
+CROSS_ENCODER_MODEL = "BAAI/bge-reranker-base"  # 🌟 中文重排序模型
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-reranker = None                                                        # 🚀 Initialize Cross-Encoder (Reranker) at the global level 
+# 🌟 初始化中文模型
+if "jieba_initialized" not in st.session_state:
+    jieba.initialize()
+    jieba.load_userdict("data/custom_words.txt")  # 自定义词典
+    st.session_state.jieba_initialized = True
+
+reranker = None
 try:
+    # 🌟 使用中文重排序器
     reranker = CrossEncoder(CROSS_ENCODER_MODEL, device=device)
 except Exception as e:
-    st.error(f"Failed to load CrossEncoder model: {str(e)}")
+    st.error(f"加载重排序模型失败: {str(e)}")
 
+# 🌟 汉化界面
+st.set_page_config(page_title="深度图谱智能检索系统", layout="wide")
 
-st.set_page_config(page_title="DeepGraph RAG-Pro", layout="wide")      # ✅ Streamlit configuration
-
-# Custom CSS
+# 🌟 中文CSS样式
 st.markdown("""
     <style>
         .stApp { background-color: #f4f4f9; }
@@ -39,8 +53,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-
-                                                                                    # Manage Session state
+# 🌟 中文会话状态
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "retrieval_pipeline" not in st.session_state:
@@ -50,91 +63,102 @@ if "rag_enabled" not in st.session_state:
 if "documents_loaded" not in st.session_state:
     st.session_state.documents_loaded = False
 
-
-with st.sidebar:                                                                        # 📁 Sidebar
-    st.header("📁 Document Management")
+# 🌟 侧边栏汉化
+with st.sidebar:
+    st.header("📁 文档管理")
     uploaded_files = st.file_uploader(
-        "Upload documents (PDF/DOCX/TXT)",
+        "上传文档（支持PDF/DOCX/TXT）",
         type=["pdf", "docx", "txt"],
         accept_multiple_files=True
     )
     
     if uploaded_files and not st.session_state.documents_loaded:
-        with st.spinner("Processing documents..."):
-            process_documents(uploaded_files,reranker,EMBEDDINGS_MODEL, OLLAMA_BASE_URL)
-            st.success("Documents processed!")
+        with st.spinner("文档处理中..."):
+            process_documents(uploaded_files, reranker, EMBEDDINGS_MODEL, device)
+            st.success("文档处理完成！")
     
     st.markdown("---")
-    st.header("⚙️ RAG Settings")
+    st.header("⚙️ 检索设置")
     
-    st.session_state.rag_enabled = st.checkbox("Enable RAG", value=True)
-    st.session_state.enable_hyde = st.checkbox("Enable HyDE", value=True)
-    st.session_state.enable_reranking = st.checkbox("Enable Neural Reranking", value=True)
-    st.session_state.enable_graph_rag = st.checkbox("Enable GraphRAG", value=True)
-    st.session_state.temperature = st.slider("Temperature", 0.0, 1.0, 0.3, 0.05)
-    st.session_state.max_contexts = st.slider("Max Contexts", 1, 5, 3)
+    st.session_state.rag_enabled = st.checkbox("启用智能检索", value=True)
+    st.session_state.enable_hyde = st.checkbox("启用查询扩展", value=True)
+    st.session_state.enable_reranking = st.checkbox("启用神经重排序", value=True)
+    st.session_state.enable_graph_rag = st.checkbox("启用知识图谱", value=True)
+    st.session_state.temperature = st.slider("生成温度", 0.0, 1.0, 0.3, 0.05)
+    st.session_state.max_contexts = st.slider("最大上下文", 1, 5, 3)
     
-    if st.button("Clear Chat History"):
+    if st.button("清空对话历史"):
         st.session_state.messages = []
         st.rerun()
 
-    # 🚀 Footer (Bottom Right in Sidebar) For some Credits :)
-    st.sidebar.markdown("""
-        <div style="position: absolute; top: 20px; right: 10px; font-size: 12px; color: gray;">
-            <b>Developed by:</b> N Sai Akhil &copy; All Rights Reserved 2025
+    st.markdown("""
+        <div style="font-size: 12px; color: gray;">
+            <b>开发者：</b>wangenyong &copy; 版权所有 2025
         </div>
     """, unsafe_allow_html=True)
 
-# 💬 Chat Interface
-st.title("🤖 DeepGraph RAG-Pro")
-st.caption("Advanced RAG System with GraphRAG, Hybrid Retrieval, Neural Reranking and Chat History")
+# 🌟 主界面汉化
+st.title("🤖 深度图谱智能检索系统")
+st.caption("集成知识图谱、混合检索与神经重排序的先进问答系统")
 
-# Display messages
+# 🌟 中文预处理函数
+def chinese_preprocess(text):
+    # 去除特殊字符
+    text = re.sub(r'[^\w\s\u4e00-\u9fa5]', '', text)
+    # 分词处理
+    words = jieba.cut(text)
+    # 去除停用词
+    words = [w for w in words if w not in STOP_WORDS]
+    return ' '.join(words)
+
+# 对话显示
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask about your documents..."):
-    chat_history = "\n".join([msg["content"] for msg in st.session_state.messages[-5:]])  # Last 5 messages
+if prompt := st.chat_input("请输入您的问题..."):
+    # 🌟 中文预处理
+    processed_prompt = chinese_preprocess(prompt)
+    
+    chat_history = "\n".join([msg["content"] for msg in st.session_state.messages[-5:]])
     st.session_state.messages.append({"role": "user", "content": prompt})
+    
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # Generate response
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         full_response = ""
         
-        # 🚀 Build context
+        # 🌟 中文优化上下文构建
         context = ""
         if st.session_state.rag_enabled and st.session_state.retrieval_pipeline:
             try:
-                docs = retrieve_documents(prompt, OLLAMA_API_URL, MODEL, chat_history)
+                docs = retrieve_documents(processed_prompt, OLLAMA_API_URL, MODEL, chat_history)
                 context = "\n".join(
-                    f"[Source {i+1}]: {doc.page_content}" 
+                    f"[来源 {i+1}]: {doc.page_content}" 
                     for i, doc in enumerate(docs)
                 )
             except Exception as e:
-                st.error(f"Retrieval error: {str(e)}")
+                st.error(f"检索错误: {str(e)}")
         
-        # 🚀 Structured Prompt
-        system_prompt = f"""Use the chat history to maintain context:
-            Chat History:
+        # 🌟 中文提示词工程
+        system_prompt = f"""基于以下上下文用中文回答问题，遵循以下步骤：
+            1. 识别关键实体和关系
+            2. 分析不同来源的一致性
+            3. 综合多源信息
+            4. 生成结构化回答
+
+            历史对话：
             {chat_history}
 
-            Analyze the question and context through these steps:
-            1. Identify key entities and relationships
-            2. Check for contradictions between sources
-            3. Synthesize information from multiple contexts
-            4. Formulate a structured response
-
-            Context:
+            上下文：
             {context}
 
-            Question: {prompt}
-            Answer:"""
+            问题：{prompt}
+            答案："""
         
-        # Stream response
+        # 流式响应
         response = requests.post(
             OLLAMA_API_URL,
             json={
@@ -142,21 +166,22 @@ if prompt := st.chat_input("Ask about your documents..."):
                 "prompt": system_prompt,
                 "stream": True,
                 "options": {
-                    "temperature": st.session_state.temperature,  # Use dynamic user-selected value
-                    "num_ctx": 4096
+                    "temperature": st.session_state.temperature,
+                    "num_ctx": 4096,
+                    "stop": ["\n\n"]  # 🌟 中文停止符
                 }
             },
             stream=True
         )
+        
         try:
             for line in response.iter_lines():
                 if line:
-                    data = json.loads(line.decode())
+                    data = json.loads(line.decode('utf-8'))  # 🌟 确保中文解码
                     token = data.get("response", "")
                     full_response += token
                     response_placeholder.markdown(full_response + "▌")
                     
-                    # Stop if we detect the end token
                     if data.get("done", False):
                         break
                         
@@ -164,5 +189,5 @@ if prompt := st.chat_input("Ask about your documents..."):
             st.session_state.messages.append({"role": "assistant", "content": full_response})
             
         except Exception as e:
-            st.error(f"Generation error: {str(e)}")
-            st.session_state.messages.append({"role": "assistant", "content": "Sorry, I encountered an error."})
+            st.error(f"生成错误: {str(e)}")
+            st.session_state.messages.append({"role": "assistant", "content": "抱歉，回答问题出错"})
