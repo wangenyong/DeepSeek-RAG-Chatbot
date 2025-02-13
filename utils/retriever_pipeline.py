@@ -1,22 +1,9 @@
 import streamlit as st
 from utils.build_graph import retrieve_from_graph
+from utils.chinese_tools import chinese_text_preprocess
 from langchain_core.documents import Document
 import requests
-import jieba  # 🌟 新增中文分词库
 import re
-
-# 🌟 中文停用词列表
-STOP_WORDS = set(["的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一个"])
-
-def chinese_text_preprocess(text):
-    """🌟 中文文本预处理"""
-    # 去除特殊字符
-    text = re.sub(r'[^\w\s\u4e00-\u9fa5]', '', text)
-    # 分词处理
-    words = jieba.cut(text)
-    # 去除停用词
-    words = [w for w in words if w not in STOP_WORDS]
-    return ' '.join(words)
 
 # 🚀 Query Expansion with HyDE (中文优化版)
 def expand_query(query, uri, model):

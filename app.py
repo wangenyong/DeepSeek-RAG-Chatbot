@@ -2,17 +2,13 @@ import streamlit as st
 import requests
 import json
 import jieba  # 🌟 新增中文分词
-import re
 from utils.retriever_pipeline import retrieve_documents
 from utils.doc_handler import process_documents
-from text2vec import SentenceModel  # 🌟 替换为中文优化模型
+from utils.chinese_tools import chinese_text_preprocess
 from sentence_transformers import CrossEncoder
 import torch
 import os
 from dotenv import load_dotenv, find_dotenv
-
-# 🌟 中文停用词表
-STOP_WORDS = set(["的", "了", "在", "是", "和", "就", "不", "人", "都", "一个", "这个"])
 
 torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]
 load_dotenv(find_dotenv())
@@ -101,15 +97,6 @@ with st.sidebar:
 st.title("🤖 深度图谱智能检索系统")
 st.caption("集成知识图谱、混合检索与神经重排序的先进问答系统")
 
-# 🌟 中文预处理函数
-def chinese_preprocess(text):
-    # 去除特殊字符
-    text = re.sub(r'[^\w\s\u4e00-\u9fa5]', '', text)
-    # 分词处理
-    words = jieba.cut(text)
-    # 去除停用词
-    words = [w for w in words if w not in STOP_WORDS]
-    return ' '.join(words)
 
 # 对话显示
 for message in st.session_state.messages:
@@ -118,7 +105,7 @@ for message in st.session_state.messages:
 
 if prompt := st.chat_input("请输入您的问题..."):
     # 🌟 中文预处理
-    processed_prompt = chinese_preprocess(prompt)
+    processed_prompt = chinese_text_preprocess(prompt)
     
     chat_history = "\n".join([msg["content"] for msg in st.session_state.messages[-5:]])
     st.session_state.messages.append({"role": "user", "content": prompt})
