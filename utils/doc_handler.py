@@ -13,6 +13,7 @@ import pdfplumber  # 更可靠的PDF解析库
 from langchain_community.document_loaders import Docx2txtLoader, TextLoader
 import tempfile
 import spacy
+import re
 
 
 # 配置常量
@@ -86,16 +87,21 @@ def process_uploaded_files(uploaded_files):
 def chinese_text_split(documents):
     """增强型中文文本分割"""
     try:
-        # 方案1：使用Spacy语义分割
+        # 方案1：使用Spacy语义分割（修正分隔符格式）
         nlp = spacy.load("zh_core_web_sm")
+        # 生成正则表达式格式的分隔符
+        separators = ["\n\n", "。", "！", "？"]
+        escaped_separators = [re.escape(s) for s in separators]
+        separator_pattern = "|".join(escaped_separators)
+        # 使用正则表达式作为分隔符
         text_splitter = SpacyTextSplitter(
             pipeline="zh_core_web_sm",
             chunk_size=100,
             chunk_overlap=20,
-            separator=["\n\n", "。", "！", "？"]  # 多级分隔符
+            separator=separator_pattern  # 传入字符串形式的正则表达式
         )
     except:
-        # 方案2：回退到递归字符分割
+        # 方案2：回退到递归字符分割（保持原列表格式）
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=100,
             chunk_overlap=20,
