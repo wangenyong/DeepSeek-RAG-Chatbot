@@ -30,9 +30,22 @@ if "jieba_initialized" not in st.session_state:
 reranker = None
 try:
     # 🌟 使用中文重排序器
-    reranker = CrossEncoder(CROSS_ENCODER_MODEL, device=device)
+    # 初始化模型
+    reranker = CrossEncoder(
+        CROSS_ENCODER_MODEL,
+        device=device,
+        max_length=512
+    )
+    
+except OSError as e:
+    st.error(f"模型加载失败: {str(e)} (请检查网络或模型路径)")
+except RuntimeError as e:
+    if "CUDA out of memory" in str(e):
+        st.error("显存不足，尝试减小 batch size 或使用 CPU 模式")
+    else:
+        st.error(f"运行时错误: {str(e)}")
 except Exception as e:
-    st.error(f"加载重排序模型失败: {str(e)}")
+    st.error(f"未知错误: {str(e)}")
 
 # 🌟 汉化界面
 st.set_page_config(page_title="深度图谱智能检索系统", layout="wide")
