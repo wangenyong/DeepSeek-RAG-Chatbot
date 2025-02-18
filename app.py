@@ -9,6 +9,39 @@ from sentence_transformers import CrossEncoder
 import torch
 import os
 from dotenv import load_dotenv, find_dotenv
+import logging
+from logging.handlers import RotatingFileHandler
+import sys
+import time
+
+def setup_logging():
+    # 创建日志格式
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(levelname)s @ %(module)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # 文件处理器（自动轮转）
+    file_handler = RotatingFileHandler(
+        'logs/app.log',
+        maxBytes=1024*1024*5,  # 5MB
+        backupCount=3,
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+
+    # 控制台处理器
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+
+    # 配置根日志
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)
+
+# 初始化日志系统
+setup_logging()
 
 torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]
 load_dotenv(find_dotenv())
@@ -81,10 +114,17 @@ with st.sidebar:
         accept_multiple_files=True
     )
     
+    # 在文档处理部分添加：
     if uploaded_files and not st.session_state.documents_loaded:
-        with st.spinner("文档处理中..."):
-            process_documents(uploaded_files, reranker, EMBEDDINGS_MODEL, device)
-            st.success("文档处理完成！")
+        try:
+            logging.info(f"开始处理文档上传：收到{len(uploaded_files)}个文件")
+            with st.spinner("文档处理中..."):
+                process_documents(uploaded_files, reranker, EMBEDDINGS_MODEL, device)
+                logging.info(f"文档处理完成，文件名：{[f.name for f in uploaded_files]}")
+                st.success("文档处理完成！")
+        except Exception as e:
+            logging.error("文档处理失败", exc_info=True)
+            st.error(f"文档处理失败: {str(e)}")
     
     st.markdown("---")
     st.header("⚙️ 检索设置")
@@ -132,14 +172,18 @@ if prompt := st.chat_input("请输入您的问题..."):
         
         # 🌟 中文优化上下文构建
         context = ""
+        # 在检索过程添加日志：
         if st.session_state.rag_enabled and st.session_state.retrieval_pipeline:
             try:
+                logging.info(f"开始文档检索 | 查询：{processed_prompt}")
                 docs = retrieve_documents(processed_prompt, OLLAMA_API_URL, MODEL, chat_history)
+                logging.info(f"检索完成 | 获得{docs and len(docs) or 0}条相关文档")
                 context = "\n".join(
                     f"[来源 {i+1}]: {doc.page_content}" 
                     for i, doc in enumerate(docs)
                 )
             except Exception as e:
+                logging.error("文档检索失败", exc_info=True)
                 st.error(f"检索错误: {str(e)}")
         
         # 🌟 中文提示词工程
@@ -175,6 +219,8 @@ if prompt := st.chat_input("请输入您的问题..."):
         )
         
         try:
+            logging.info(f"开始生成回答 | 温度：{st.session_state.temperature}")
+            start_time = time.time()
             for line in response.iter_lines():
                 if line:
                     data = json.loads(line.decode('utf-8'))  # 🌟 确保中文解码
@@ -184,10 +230,12 @@ if prompt := st.chat_input("请输入您的问题..."):
                     
                     if data.get("done", False):
                         break
-                        
+            duration = time.time() - start_time
+            logging.info(f"回答生成成功 | 耗时：{duration:.2f}s | 响应长度：{len(full_response)}")           
             response_placeholder.markdown(full_response)
             st.session_state.messages.append({"role": "assistant", "content": full_response})
             
         except Exception as e:
+            logging.error("回答生成失败", exc_info=True)
             st.error(f"生成错误: {str(e)}")
             st.session_state.messages.append({"role": "assistant", "content": "抱歉，回答问题出错"})
