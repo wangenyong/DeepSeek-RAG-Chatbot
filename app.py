@@ -15,6 +15,12 @@ import sys
 import time
 
 def setup_logging():
+    root_logger = logging.getLogger()
+    
+    # 关键修复：清理现有handler
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
     # 创建日志格式
     formatter = logging.Formatter(
         '[%(asctime)s] %(levelname)s @ %(module)s: %(message)s',
