@@ -52,8 +52,7 @@ def retrieve_documents(query, uri, model, chat_history=""):
         graph_query = chinese_text_preprocess(query)
         graph_results = retrieve_from_graph(
             graph_query, 
-            st.session_state.retrieval_pipeline["knowledge_graph"],
-            lang="zh"  # 🌟 指定中文模式
+            st.session_state.retrieval_pipeline["knowledge_graph"]
         )
         
         # 🌟 处理图检索结果
