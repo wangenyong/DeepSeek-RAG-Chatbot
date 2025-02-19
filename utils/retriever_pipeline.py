@@ -113,7 +113,6 @@ def retrieve_documents(query, uri, model, chat_history=""):
 
         # 🚀 中文重排序优化
         if st.session_state.enable_reranking:
-            logging.info("执行重排序 | 文档数：%d | 批处理大小：%d", len(docs), batch_size)
             # 🌟 使用中文优化的reranker
             reranker = st.session_state.retrieval_pipeline["reranker"]
             pairs = [[processed_query, chinese_text_preprocess(doc.page_content)] for doc in docs]
