@@ -215,6 +215,11 @@ if prompt := st.chat_input("请输入您的问题..."):
 
                 📚上下文：{context[:1000]}...（共{len(context)}字）
                 ❓问题：{prompt}
+                请按以下格式回答：
+                【分析过程】
+                1. 实体识别：...
+                2. 一致性对比：...
+                【最终答案】
                 🖋答案："""
                 
             logging.info(f"[{current_request_id}] 完整提示词:\n{system_prompt}")
@@ -229,7 +234,7 @@ if prompt := st.chat_input("请输入您的问题..."):
                     "options": {
                         "temperature": max(0.1, min(st.session_state.temperature, 1.0)),  # 温度值安全限制
                         "num_ctx": 4096,
-                        "stop": ["\n\n", "<|endoftext|>", "答案："]  # 防止模型自重复
+                        "stop": ["\n\n\n", "<|endoftext|>"] 
                     }
                 },
                 stream=True
@@ -251,7 +256,7 @@ if prompt := st.chat_input("请输入您的问题..."):
                         try:
                             data = json.loads(line.decode('utf-8'))
                             # 多字段兼容
-                            token = data.get("response") or data.get("content") or data.get("text", "")
+                            token = data.get("response") or data.get("content") or data.get("text") or ""
                             
                             if token:
                                 token_count += 1
@@ -263,6 +268,8 @@ if prompt := st.chat_input("请输入您的问题..."):
                             
                             # 结束条件判断
                             if data.get("done", False):
+                                if token := data.get("final_answer"):  # 如果有最终答案字段
+                                    full_response += token
                                 logging.info(f"[{current_request_id}] 收到结束标记 | 最后数据: {data}")
                                 break
                                 
