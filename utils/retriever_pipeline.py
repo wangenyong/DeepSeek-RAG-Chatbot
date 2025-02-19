@@ -28,12 +28,15 @@ def expand_query(query, uri, model):
             "prompt": prompt,
             "stream": False,
             "temperature": 0.7  # 🌟 调整生成多样性
-        }, timeout=10).json()
+        }, timeout=(5, 60))
+        
+        response_data = response.json() 
+        
         logging.info("模型响应接收 | 状态码：%d | 响应长度：%d", 
                      response.status_code, len(response.text))
         
         # 🌟 结果清洗
-        generated = response.get('response', '').strip()
+        generated = response_data.get('response', '').strip()
         logging.info("原始生成内容 | 长度：%d 字符 | 示例：%s",
                     len(generated), generated[:50].replace('\n', ' ')+"...")
         
