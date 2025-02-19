@@ -19,7 +19,7 @@ def expand_query(query, uri, model):
         问题：{query}
         假设回答："""
         
-        logging.debug("生成提示模板 | 长度：%d 字符 | 示例：%s", 
+        logging.info("生成提示模板 | 长度：%d 字符 | 示例：%s", 
                     len(prompt), prompt[:100].replace('\n', ' ')+"...")
         
         logging.info("调用语言模型 | 服务地址：%s | 模型：%s", uri, model)
@@ -29,12 +29,12 @@ def expand_query(query, uri, model):
             "stream": False,
             "temperature": 0.7  # 🌟 调整生成多样性
         }, timeout=10).json()
-        logging.debug("模型响应接收 | 状态码：%d | 响应长度：%d", 
+        logging.info("模型响应接收 | 状态码：%d | 响应长度：%d", 
                      response.status_code, len(response.text))
         
         # 🌟 结果清洗
         generated = response.get('response', '').strip()
-        logging.debug("原始生成内容 | 长度：%d 字符 | 示例：%s",
+        logging.info("原始生成内容 | 长度：%d 字符 | 示例：%s",
                     len(generated), generated[:50].replace('\n', ' ')+"...")
         
         # 结果处理
@@ -57,14 +57,14 @@ def retrieve_documents(query, uri, model, chat_history=""):
     try:
         # 🌟 中文预处理
         processed_query = chinese_text_preprocess(query)
-        logging.debug("查询预处理完成 | 原始长度：%d → 处理后：%d 字符",
+        logging.info("查询预处理完成 | 原始长度：%d → 处理后：%d 字符",
                      len(query), len(processed_query))
         # HyDE扩展
         if st.session_state.enable_hyde:
             logging.info("启用HyDE扩展 | 历史上下文长度：%d 字符", len(chat_history))
             expanded_query = expand_query(f"{chat_history}\n{processed_query}", uri, model)
             expanded_query = chinese_text_preprocess(expanded_query)  # 🌟 扩展查询也预处理
-            logging.debug("扩展后查询 | 长度：%d 字符 | 示例：%s",
+            logging.info("扩展后查询 | 长度：%d 字符 | 示例：%s",
                          len(expanded_query), expanded_query[:100]+"...")
         else:
             logging.info("HyDE扩展未启用")
@@ -90,7 +90,7 @@ def retrieve_documents(query, uri, model, chat_history=""):
             )
             logging.info("图谱匹配结果 | 匹配实体数：%d", len(graph_results))
             if graph_results:
-                logging.debug("TOP3图谱实体：%s", graph_results[:3])
+                logging.info("TOP3图谱实体：%s", graph_results[:3])
             
             # 🌟 处理图检索结果
             graph_docs = []
@@ -122,7 +122,7 @@ def retrieve_documents(query, uri, model, chat_history=""):
             for i in range(0, len(pairs), batch_size):
                 batch = pairs[i:i+batch_size]
                 scores.extend(reranker.predict(batch))
-                logging.debug("已处理批次：%d/%d", i//batch_size+1, len(pairs)//batch_size+1)
+                logging.info("已处理批次：%d/%d", i//batch_size+1, len(pairs)//batch_size+1)
             logging.info("重排序完成 | 最高分：%.2f | 最低分：%.2f", 
                         max(scores) if scores else 0, min(scores) if scores else 0)
             # 按分数排序
@@ -134,10 +134,12 @@ def retrieve_documents(query, uri, model, chat_history=""):
         original_count = len(ranked_docs)
         final_docs = []
         for doc in ranked_docs[:st.session_state.max_contexts]:
-            # 🌟 确保内容为中文
             content = doc.page_content
-            if not any('\u4e00' <= c <= '\u9fff' in content for c in content):
-                continue  # 过滤非中文内容
+            # 添加中文内容比例阈值控制
+            MIN_CHINESE_RATIO = 0.3  # 至少30%字符是中文
+            chinese_chars = sum(1 for c in content if '\u4e00' <= c <= '\u9fff')
+            if chinese_chars / len(content) < MIN_CHINESE_RATIO:
+                continue
             final_docs.append(doc)
         
         logging.info("结果过滤 | 原始数：%d → 最终数：%d | 过滤比例：%.1f%%",

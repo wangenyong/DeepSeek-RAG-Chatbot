@@ -14,6 +14,10 @@ from logging.handlers import RotatingFileHandler
 import sys
 import time
 
+# 在文件头部添加请求ID用于追踪
+import uuid
+current_request_id = str(uuid.uuid4())[:8]
+
 def setup_logging():
     root_logger = logging.getLogger()
     
@@ -192,56 +196,99 @@ if prompt := st.chat_input("请输入您的问题..."):
                 logging.error("文档检索失败", exc_info=True)
                 st.error(f"检索错误: {str(e)}")
         
-        # 🌟 中文提示词工程
-        system_prompt = f"""基于以下上下文用中文回答问题，遵循以下步骤：
-            1. 识别关键实体和关系
-            2. 分析不同来源的一致性
-            3. 综合多源信息
-            4. 生成结构化回答
-
-            历史对话：
-            {chat_history}
-
-            上下文：
-            {context}
-
-            问题：{prompt}
-            答案："""
-        
-        # 流式响应
-        response = requests.post(
-            OLLAMA_API_URL,
-            json={
-                "model": MODEL,
-                "prompt": system_prompt,
-                "stream": True,
-                "options": {
-                    "temperature": st.session_state.temperature,
-                    "num_ctx": 4096,
-                    "stop": ["\n\n"]  # 🌟 中文停止符
-                }
-            },
-            stream=True
-        )
-        
         try:
-            logging.info(f"开始生成回答 | 温度：{st.session_state.temperature}")
+            # 🌟 初始化关键变量
+            full_response = ""
+            response_buffer = b""
+            token_count = 0
             start_time = time.time()
-            for line in response.iter_lines():
-                if line:
-                    data = json.loads(line.decode('utf-8'))  # 🌟 确保中文解码
-                    token = data.get("response", "")
-                    full_response += token
-                    response_placeholder.markdown(full_response + "▌")
-                    
-                    if data.get("done", False):
-                        break
-            duration = time.time() - start_time
-            logging.info(f"回答生成成功 | 耗时：{duration:.2f}s | 响应长度：{len(full_response)}")           
-            response_placeholder.markdown(full_response)
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
             
+            logging.info(f"[{current_request_id}] 开始处理请求 | 温度={st.session_state.temperature} | 最大上下文={st.session_state.max_contexts}")
+            
+            # 🌟 增强提示词结构
+            system_prompt = f"""基于以下上下文用中文回答问题(步骤):
+                1️⃣【实体识别】提取关键人物、地点、时间
+                2️⃣【一致性分析】对比{st.session_state.max_contexts}个来源的异同
+                3️⃣【综合推理】结合历史对话分析：
+                {chat_history[-3:] if chat_history else "无历史"}
+                4️⃣【结构化输出】按要点分项说明
+
+                📚上下文：{context[:1000]}...（共{len(context)}字）
+                ❓问题：{prompt}
+                🖋答案："""
+                
+            logging.info(f"[{current_request_id}] 完整提示词:\n{system_prompt}")
+
+            # 🌟 增强请求超时设置
+            response = requests.post(
+                OLLAMA_API_URL,
+                json={
+                    "model": MODEL,
+                    "prompt": system_prompt,
+                    "stream": True,
+                    "options": {
+                        "temperature": max(0.1, min(st.session_state.temperature, 1.0)),  # 温度值安全限制
+                        "num_ctx": 4096,
+                        "stop": ["\n\n", "<|endoftext|>", "答案："]  # 防止模型自重复
+                    }
+                },
+                stream=True
+            )
+            logging.info(f"[{current_request_id}] API请求成功 | 状态码: {response.status_code}")
+            
+            # 🌟 改进的流式处理
+            for raw_chunk in response.iter_content(chunk_size=512):
+                if raw_chunk:
+                    response_buffer += raw_chunk
+                    # 处理分块可能包含多个JSON的情况
+                    while b'\n' in response_buffer:
+                        line, response_buffer = response_buffer.split(b'\n', 1)
+                        if not line:
+                            continue
+                        # 记录原始数据（调试用）
+                        line_debug = line.decode('utf-8', errors='replace')
+                        logging.info(f"原始数据: {line_debug}")
+                        try:
+                            data = json.loads(line.decode('utf-8'))
+                            # 多字段兼容
+                            token = data.get("response") or data.get("content") or data.get("text", "")
+                            
+                            if token:
+                                token_count += 1
+                                full_response += token
+                                # 流式更新频率控制（每3个token或0.5秒更新一次）
+                                if token_count % 3 == 0 or (time.time() - start_time) > 0.5:
+                                    response_placeholder.markdown(full_response + "▌")
+                                    start_time = time.time()
+                            
+                            # 结束条件判断
+                            if data.get("done", False):
+                                logging.info(f"[{current_request_id}] 收到结束标记 | 最后数据: {data}")
+                                break
+                                
+                        except json.JSONDecodeError as e:
+                            logging.warning(f"[{current_request_id}] JSON解析异常 | 数据块: {line} | 错误: {str(e)}")
+                        except Exception as e:
+                            logging.error(f"[{current_request_id}] 流处理异常 | 类型: {type(e).__name__} | 错误: {str(e)} | 原始数据: {line}", exc_info=True)
+
+        except StopIteration:
+            logging.info(f"[{current_request_id}] 流式响应正常结束")
+        except requests.exceptions.Timeout:
+            logging.error(f"[{current_request_id}] 请求超时 | 已接收数据: {len(full_response)}字")
+            st.error("响应超时，请简化问题重试")
         except Exception as e:
-            logging.error("回答生成失败", exc_info=True)
-            st.error(f"生成错误: {str(e)}")
-            st.session_state.messages.append({"role": "assistant", "content": "抱歉，回答问题出错"})
+            logging.critical(f"[{current_request_id}] 未捕获异常", exc_info=True)
+            st.error("系统内部错误，请联系管理员")
+        finally:
+            # 🌟 最终处理
+            if full_response:
+                response_placeholder.markdown(full_response)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": full_response,
+                    "request_id": current_request_id  # 用于后续追踪
+                })
+                logging.info(f"[{current_request_id}] 响应完成 | 总耗时: {time.time()-start_time:.2f}s | 总token数: {token_count}")
+            else:
+                st.error("未能生成有效响应")
+                logging.warning(f"[{current_request_id}] 空响应 | 缓冲区大小: {len(response_buffer)}")

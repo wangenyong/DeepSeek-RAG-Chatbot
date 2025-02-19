@@ -41,7 +41,7 @@ def process_uploaded_files(uploaded_files):
                 # 写入临时文件
                 temp_file.write(file.getbuffer())
                 temp_path = Path(temp_file.name)
-                logging.debug(f"创建临时文件成功 | 路径：{temp_path}")
+                logging.info(f"创建临时文件成功 | 路径：{temp_path}")
 
                 # 根据文件类型选择处理器
                 if file_ext == '.pdf':
@@ -88,7 +88,7 @@ def process_uploaded_files(uploaded_files):
                 try:
                     if temp_path.exists():
                         temp_path.unlink()
-                        logging.debug(f"临时文件已清理 | 路径：{temp_path}")
+                        logging.info(f"临时文件已清理 | 路径：{temp_path}")
                 except Exception as e:
                     logging.error(f"临时文件清理失败 | 路径：{temp_path}", exc_info=True)
 
@@ -211,7 +211,7 @@ def process_documents(uploaded_files, reranker, embedding_model, device):
     if "knowledge_graph" in st.session_state.retrieval_pipeline:
         try:
             G = st.session_state.retrieval_pipeline["knowledge_graph"]
-            logging.debug(f"知识图谱统计 | 节点示例：{list(G.nodes)[:5]}... | 边示例：{list(G.edges(data=True))[:3]}...")
+            logging.info(f"知识图谱统计 | 节点示例：{list(G.nodes)[:5]}... | 边示例：{list(G.edges(data=True))[:3]}...")
             
             st.write(f"🔗 总节点数: {len(G.nodes)}")
             st.write(f"🔗 总边数: {len(G.edges)}")
