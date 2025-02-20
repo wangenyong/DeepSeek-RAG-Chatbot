@@ -178,6 +178,30 @@ if prompt := st.chat_input("请输入您的问题..."):
     
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
+        
+        # 🌟 新增加载动画组件
+        with response_placeholder.container():
+            st.markdown("""
+            <div style="display: flex; align-items: center; gap: 0.8rem; color: #4a4a4a; position: relative; top: -6px;">
+                <div class="loader"></div>
+                <div>正在思考中...</div>
+            </div>
+            <style>
+            .loader {
+                border: 3px solid #f3f3f3;
+                border-radius: 50%;
+                border-top: 3px solid #409EFF;
+                width: 24px;
+                height: 24px;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            </style>
+            """, unsafe_allow_html=True)
+        
         full_response = ""
         
         # 🌟 中文优化上下文构建
@@ -260,6 +284,25 @@ if prompt := st.chat_input("请输入您的问题..."):
                 stream=True
             )
             logging.info(f"[{current_request_id}] API请求成功 | 状态码: {response.status_code}")
+            
+            # 🌟 清空加载动画
+            response_placeholder.empty()  # 这里清除之前的加载动画
+            
+            # 🌟 新增打字机样式的位置 (就是这里！)
+            typing_style = """
+            <style>
+                .typing-cursor {
+                    animation: blink 1s step-end infinite;
+                    font-weight: bold;
+                    color: #2ecc71;
+                }
+                @keyframes blink {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0; }
+                }
+            </style>
+            """
+            st.markdown(typing_style, unsafe_allow_html=True)  # 注入样式
             
             # 🌟 改进段代码对 ollama deepseek7b请求回答，但是think 阶段完成一句话之后就结束，没有正式的回答信息，最后一句数据如下的流式处理
             for raw_chunk in response.iter_content(chunk_size=512):
