@@ -106,16 +106,16 @@ def chinese_text_split(documents):
         separator_pattern = "|".join([re.escape(s) for s in separators])
         text_splitter = SpacyTextSplitter(
             pipeline="zh_core_web_sm",
-            chunk_size=100,
-            chunk_overlap=20,
+            chunk_size=500,
+            chunk_overlap=100,
             separator=separator_pattern
         )
         logging.info("使用Spacy语义分割器")
     except Exception as e:
         logging.warning("Spacy加载失败，回退到递归分割 | 错误：%s", str(e))
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=100,
-            chunk_overlap=20,
+            chunk_size=500,
+            chunk_overlap=100,
             separators=["\n\n", "。", "！", "？", "\n", "，", ""]
         )
     
