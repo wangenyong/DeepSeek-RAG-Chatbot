@@ -326,7 +326,7 @@ if prompt := st.chat_input("请输入您的问题..."):
                                 full_response += token
                                 # 流式更新频率控制（每3个token或0.5秒更新一次）
                                 if token_count % 3 == 0 or (time.time() - start_time) > 0.5:
-                                    response_placeholder.markdown(full_response + "▌")
+                                    response_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
                                     start_time = time.time()
                             
                             # 结束条件判断
@@ -352,7 +352,7 @@ if prompt := st.chat_input("请输入您的问题..."):
         finally:
             # 🌟 最终处理
             if full_response:
-                response_placeholder.markdown(full_response)
+                response_placeholder.markdown(full_response, unsafe_allow_html=True)
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": full_response,
