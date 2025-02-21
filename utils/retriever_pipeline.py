@@ -27,7 +27,7 @@ def expand_query(query, uri, model):
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "temperature": 0.7  # 🌟 调整生成多样性
+            "temperature": st.session_state.temperature  # 🌟 调整生成多样性
         }, timeout=(5, 60))
         
         response_data = response.json() 
