@@ -213,9 +213,9 @@ def process_documents(uploaded_files, reranker, embedding_model, device):
             G = st.session_state.retrieval_pipeline["knowledge_graph"]
             logging.info(f"知识图谱统计 | 节点示例：{list(G.nodes)[:5]}... | 边示例：{list(G.edges(data=True))[:3]}...")
             
-            st.write(f"🔗 总节点数: {len(G.nodes)}")
-            st.write(f"🔗 总边数: {len(G.edges)}")
-            st.write(f"🔗 示例节点: {list(G.nodes)[:10]}")
-            st.write(f"🔗 示例关系: {list(G.edges(data=True))[:5]}")
+            logging.info(f"🔗 总节点数: {len(G.nodes)}")
+            logging.info(f"🔗 总边数: {len(G.edges)}")
+            logging.info(f"🔗 示例节点: {list(G.nodes)[:10]}")
+            logging.info(f"🔗 示例关系: {list(G.edges(data=True))[:5]}")
         except Exception as e:
             logging.warning("知识图谱调试信息显示失败", exc_info=True)
