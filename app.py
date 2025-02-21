@@ -142,7 +142,8 @@ with st.sidebar:
     st.session_state.rag_enabled = st.checkbox("启用智能检索", value=True)
     st.session_state.enable_hyde = st.checkbox("启用查询扩展", value=False)
     st.session_state.enable_reranking = st.checkbox("启用神经重排序", value=False)
-    st.session_state.enable_graph_rag = st.checkbox("启用知识图谱", value=False)
+    #st.session_state.enable_graph_rag = st.checkbox("启用知识图谱", value=False)
+    st.session_state.enable_graph_rag = False  # 🌟 暂时关闭图谱增强
     st.session_state.temperature = st.slider("生成温度", 0.0, 1.0, 0.3, 0.05)
     st.session_state.max_contexts = st.slider("最大上下文", 1, 5, 3)
     
