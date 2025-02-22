@@ -13,6 +13,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import sys
 import time
+import re
 
 # 在文件头部添加请求ID用于追踪
 import uuid
@@ -92,6 +93,11 @@ except Exception as e:
 
 # 🌟 汉化界面
 st.set_page_config(page_title="PEACOCK智能检索系统", layout="wide")
+
+def replace_placeholder(text):
+    pattern = r'<think>(.*?)(?=<think>|$)'
+    replacement = r'<span style="color: gray; font-style: italic;">\1</span>'
+    return re.sub(pattern, replacement, text)
 
 # 在脚本最前面添加样式
 st.markdown("""
@@ -183,10 +189,11 @@ if prompt := st.chat_input("请输入您的问题..."):
         st.markdown(prompt)
     
     with st.chat_message("assistant"):
+        think_placeholder = st.empty()
         response_placeholder = st.empty()
         
         # 🌟 新增加载动画组件
-        with response_placeholder.container():
+        with think_placeholder.container():
             st.markdown("""
             <div style="display: flex; align-items: center; gap: 0.8rem; color: #4a4a4a; position: relative; top: -6px;">
                 <div class="loader"></div>
@@ -228,6 +235,7 @@ if prompt := st.chat_input("请输入您的问题..."):
         
         try:
             # 🌟 初始化关键变量
+            think_response = ""
             full_response = ""
             response_buffer = b""
             token_count = 0
@@ -280,7 +288,9 @@ if prompt := st.chat_input("请输入您的问题..."):
             logging.info(f"[{current_request_id}] API请求成功 | 状态码: {response.status_code}")
             
             # 🌟 清空加载动画
-            response_placeholder.empty()  # 这里清除之前的加载动画
+            think_placeholder.empty()  # 这里清除之前的加载动画
+            
+            think_mode = False
             
             for raw_chunk in response.iter_content(chunk_size=512):
                 if raw_chunk:
@@ -300,10 +310,27 @@ if prompt := st.chat_input("请输入您的问题..."):
                             
                             if token:
                                 token_count += 1
-                                full_response += token
+                                if think_mode == False and "<think>" in token:
+                                    logging.info(f"[{current_request_id}] 发现思考标记 | 数据: {token}")
+                                    think_response += replace_placeholder(token)
+                                    think_mode = True
+                                elif think_mode == True and "</think>" in token:
+                                    logging.info(f"[{current_request_id}] 结束思考标记 | 数据: {token}")
+                                    think_response += token.split("</think>")[0]
+                                    think_mode = False
+                                elif think_mode == True:
+                                    position = think_response.find("</span>")
+                                    if position != -1:
+                                        think_response = think_response[:position] + token + think_response[position:]
+                                else:
+                                    full_response += token
+                        
                                 # 流式更新频率控制（每3个token或0.5秒更新一次）
                                 if token_count % 3 == 0 or (time.time() - start_time) > 0.5:
-                                    response_placeholder.markdown(full_response + "▌")
+                                    if think_mode:
+                                        think_placeholder.markdown(think_response + "▌", unsafe_allow_html=True)
+                                    else:
+                                        response_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
                                     start_time = time.time()
                             
                             # 结束条件判断
@@ -329,7 +356,8 @@ if prompt := st.chat_input("请输入您的问题..."):
         finally:
             # 🌟 最终处理
             if full_response:
-                response_placeholder.markdown(full_response)
+                think_placeholder.markdown(think_response, unsafe_allow_html=True)
+                response_placeholder.markdown(full_response, unsafe_allow_html=True)
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": full_response,
