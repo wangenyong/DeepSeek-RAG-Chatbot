@@ -93,17 +93,6 @@ except Exception as e:
 # 🌟 汉化界面
 st.set_page_config(page_title="深度图谱智能检索系统", layout="wide")
 
-# 🌟 中文CSS样式
-st.markdown("""
-    <style>
-        .stApp { background-color: #f4f4f9; }
-        h1 { color: #00FF99; text-align: center; }
-        .stChatMessage { border-radius: 10px; padding: 10px; margin: 10px 0; }
-        .stChatMessage.user { background-color: #e8f0fe; }
-        .stChatMessage.assistant { background-color: #d1e7dd; }
-        .stButton>button { background-color: #00AAFF; color: white; }
-    </style>
-""", unsafe_allow_html=True)
 
 # 🌟 中文会话状态
 if "messages" not in st.session_state:
