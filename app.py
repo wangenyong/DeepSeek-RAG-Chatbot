@@ -93,6 +93,26 @@ except Exception as e:
 # 🌟 汉化界面
 st.set_page_config(page_title="深度图谱智能检索系统", layout="wide")
 
+# 在脚本最前面添加样式
+st.markdown("""
+<style>
+    /* 主标题居中 */
+    h1 {
+        text-align: center;
+        font-family: 'Arial Black', sans-serif;
+        color: #2D4263;
+        text-shadow: 2px 2px 4px rgba(45,66,99,0.1);
+    }
+    
+    /* 增加顶部间距 */
+    .stApp {
+        margin-top: -50px;
+        padding-top: 80px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🤖 PEACOCK智能检索系统")
 
 # 🌟 中文会话状态
 if "messages" not in st.session_state:
@@ -145,11 +165,7 @@ with st.sidebar:
             <b>开发者：</b>wangenyong &copy; 版权所有 2025
         </div>
     """, unsafe_allow_html=True)
-
-# 🌟 主界面汉化
-st.title("🤖 深度图谱智能检索系统")
-st.caption("集成知识图谱、混合检索与神经重排序的先进问答系统")
-
+    
 
 # 对话显示
 for message in st.session_state.messages:
