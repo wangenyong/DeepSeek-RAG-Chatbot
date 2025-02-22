@@ -91,7 +91,7 @@ except Exception as e:
     st.error(f"未知错误: {str(e)}")
 
 # 🌟 汉化界面
-st.set_page_config(page_title="深度图谱智能检索系统", layout="wide")
+st.set_page_config(page_title="PEACOCK智能检索系统", layout="wide")
 
 # 在脚本最前面添加样式
 st.markdown("""
@@ -253,24 +253,12 @@ if prompt := st.chat_input("请输入您的问题..."):
             4. 知识缺口：{'' if len(docs)>=3 else '⚠️ 注意：当前知识库覆盖不足'}
 
             📝【回答格式】
-            【知识分析】用emoji图标区分阶段
             🕵️ 提取结果：蓝色标记关键实体
             📊 来源评估：表格展示(来源|关键点|可信度)
             🔍 差异报告：{len(docs)>1 and '对比表格' or '无'}
             【最终答案】
             ✅ 确定性回答（当知识库充足时）
-            ❓ 推测性回答（需标注不确定性部分）
-
-            示例：
-            【知识分析】
-            🕵️ 关键实体：量子计算
-            📊 来源评估：
-            | 来源 | 关键信息 | 可信度 |
-            |------|---------|-------|
-            | #1   | ...     | ★★★☆☆ |
-            🔍 差异报告：来源#1与#2在量子比特数上表述不同（50 vs 53）
-            【最终答案】
-            根据知识库#1最新信息，量子计算芯片...（差异部分建议查阅2024技术白皮书）"""
+            ❓ 推测性回答（需标注不确定性部分）"""
                 
             logging.info(f"[{current_request_id}] 完整提示词:\n{system_prompt}")
 
@@ -294,7 +282,6 @@ if prompt := st.chat_input("请输入您的问题..."):
             # 🌟 清空加载动画
             response_placeholder.empty()  # 这里清除之前的加载动画
             
-            # 🌟 改进段代码对 ollama deepseek7b请求回答，但是think 阶段完成一句话之后就结束，没有正式的回答信息，最后一句数据如下的流式处理
             for raw_chunk in response.iter_content(chunk_size=512):
                 if raw_chunk:
                     response_buffer += raw_chunk
@@ -316,7 +303,7 @@ if prompt := st.chat_input("请输入您的问题..."):
                                 full_response += token
                                 # 流式更新频率控制（每3个token或0.5秒更新一次）
                                 if token_count % 3 == 0 or (time.time() - start_time) > 0.5:
-                                    response_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
+                                    response_placeholder.markdown(full_response + "▌")
                                     start_time = time.time()
                             
                             # 结束条件判断
@@ -342,7 +329,7 @@ if prompt := st.chat_input("请输入您的问题..."):
         finally:
             # 🌟 最终处理
             if full_response:
-                response_placeholder.markdown(full_response, unsafe_allow_html=True)
+                response_placeholder.markdown(full_response)
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": full_response,
