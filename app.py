@@ -145,6 +145,7 @@ if prompt := st.chat_input("请输入您的问题..."):
         with think_placeholder.container():
             st.markdown(thinking_loading_style, unsafe_allow_html=True)
         
+        think_response = ""
         full_response = ""
         
         # 🌟 中文优化上下文构建
@@ -175,11 +176,16 @@ if prompt := st.chat_input("请输入您的问题..."):
             
             # 🌟 增强提示词结构
             system_prompt = f"""基于本地知识库用中文专业地回答，严格遵循步骤：
-            【知识库使用原则】
-            1. 优先使用 以下检索到的知识库内容（共{len(docs)}条）：
+            【待解决问题】▲
+            用户提问：{processed_prompt} ▲
+            
+            【知识库使用原则】▲
+            1. 问题解析：明确用户核心诉求与隐含需求
+            2. 内容匹配：优先使用以下检索结果（共{len(docs)}条）：
             {context[:1500]}...
-            2. 若知识库内容不足，需明确说明「根据现有知识库信息」并给出建议性回答
-            3. 当不同来源冲突时，标注差异并建议核实
+            3. 缺口处理：当知识覆盖不足时：
+            - 标注缺失维度（技术参数/案例/法规等）
+            - 建议补充方向
 
             【回答步骤】
             1. 实体提取：识别问题中的关键实体（标蓝显示）
@@ -194,11 +200,14 @@ if prompt := st.chat_input("请输入您的问题..."):
             提取结果：蓝色标记关键实体
             来源评估：表格展示(来源|关键点|可信度)
             差异报告：{len(docs)>1 and '对比表格' or '无'}
+            
             【最终答案】
             确定性回答（当知识库充足时）
-            推测性回答（需标注不确定性部分）"""
-                
-            logging.info(f"[{current_request_id}] 完整提示词:\n{system_prompt}")
+            推测性回答（需标注不确定性部分）
+            
+            ⚠️ 禁止行为：
+            - 超出知识库范围的猜测
+            - 未经验证的跨领域推论"""
 
             # 🌟 增强请求超时设置
             response = requests.post(
