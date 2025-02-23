@@ -5,6 +5,7 @@ import jieba  # 🌟 新增中文分词
 from utils.retriever_pipeline import retrieve_documents
 from utils.doc_handler import process_documents
 from utils.chinese_tools import chinese_text_preprocess
+from utils.style_files import thinking_style, answer_style, thinking_loading_style, app_style
 from sentence_transformers import CrossEncoder
 import torch
 import os
@@ -13,7 +14,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 import sys
 import time
-import re
 
 # 在文件头部添加请求ID用于追踪
 import uuid
@@ -94,29 +94,8 @@ except Exception as e:
 # 🌟 汉化界面
 st.set_page_config(page_title="PEACOCK智能检索系统", layout="wide")
 
-def replace_placeholder(text):
-    pattern = r'<think>(.*?)(?=<think>|$)'
-    replacement = r'<span style="color: gray; font-style: italic;">\1</span>'
-    return re.sub(pattern, replacement, text)
-
 # 在脚本最前面添加样式
-st.markdown("""
-<style>
-    /* 主标题居中 */
-    h1 {
-        text-align: center;
-        font-family: 'Arial Black', sans-serif;
-        color: #2D4263;
-        text-shadow: 2px 2px 4px rgba(45,66,99,0.1);
-    }
-    
-    /* 增加顶部间距 */
-    .stApp {
-        margin-top: -50px;
-        padding-top: 80px;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.markdown(app_style, unsafe_allow_html=True)
 
 st.title("🤖 PEACOCK智能检索系统")
 
@@ -176,7 +155,10 @@ with st.sidebar:
 # 对话显示
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        if message["role"] == "assistant":
+            st.markdown(answer_style.format(message["content"]), unsafe_allow_html=True)
+        else:
+            st.markdown(message["content"])
 
 if prompt := st.chat_input("请输入您的问题..."):
     # 🌟 中文预处理
@@ -194,54 +176,7 @@ if prompt := st.chat_input("请输入您的问题..."):
         
         # 🌟 新增加载动画组件
         with think_placeholder.container():
-            st.markdown("""
-            <div style="display: flex; align-items: center; gap: 0.8rem; color: #4a4a4a; position: relative; top: -6px;">
-                <div class="loader"></div>
-                <div>正在思考中...</div>
-            </div>
-            <style>
-            .loader {
-                border: 3px solid #f3f3f3;
-                border-radius: 50%;
-                border-top: 3px solid #409EFF;
-                width: 24px;
-                height: 24px;
-                animation: spin 1s linear infinite;
-            }
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-        thinking_style = """
-            <div style="
-                background: #f8f9fa;
-                border-left: 4px solid #6c757d;
-                padding: 1rem;
-                margin: 1rem 0;
-                border-radius: 4px;
-                color: #495057;
-            ">
-            💡 思考过程：<br>
-            {}
-            </div>
-            """
-
-        answer_style = """
-            <div style="
-                background: #e9f5e9;
-                border: 2px solid #28a745;
-                padding: 1.25rem;
-                margin: 1.5rem 0;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            ">
-            ✅ 最终答案：<br>
-            {}
-            </div>
-            """
+            st.markdown(thinking_loading_style, unsafe_allow_html=True)
         
         full_response = ""
         
@@ -273,13 +208,13 @@ if prompt := st.chat_input("请输入您的问题..."):
             
             # 🌟 增强提示词结构
             system_prompt = f"""基于本地知识库用中文专业地回答，严格遵循步骤：
-            📚【知识库使用原则】
-            1. 优先使用以下检索到的知识库内容（共{len(docs)}条）：
+            【知识库使用原则】
+            1. 优先使用 以下检索到的知识库内容（共{len(docs)}条）：
             {context[:1500]}...
             2. 若知识库内容不足，需明确说明「根据现有知识库信息」并给出建议性回答
             3. 当不同来源冲突时，标注差异并建议核实
 
-            🔍【回答步骤】
+            【回答步骤】
             1. 实体提取：识别问题中的关键实体（标蓝显示）
             2. 来源分析：对每个知识片段进行：
             - 可信度评估（★☆☆☆～★★★★★）
@@ -288,13 +223,13 @@ if prompt := st.chat_input("请输入您的问题..."):
             {'''- 对比[来源X]与[来源Y]在「差异点」上的表述''' if len(docs)>1 else '- 单一来源无需对比'}
             4. 知识缺口：{'' if len(docs)>=3 else '⚠️ 注意：当前知识库覆盖不足'}
 
-            📝【回答格式】
-            🕵️ 提取结果：蓝色标记关键实体
-            📊 来源评估：表格展示(来源|关键点|可信度)
-            🔍 差异报告：{len(docs)>1 and '对比表格' or '无'}
+            【回答格式】
+            提取结果：蓝色标记关键实体
+            来源评估：表格展示(来源|关键点|可信度)
+            差异报告：{len(docs)>1 and '对比表格' or '无'}
             【最终答案】
-            ✅ 确定性回答（当知识库充足时）
-            ❓ 推测性回答（需标注不确定性部分）"""
+            确定性回答（当知识库充足时）
+            推测性回答（需标注不确定性部分）"""
                 
             logging.info(f"[{current_request_id}] 完整提示词:\n{system_prompt}")
 
