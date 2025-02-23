@@ -102,7 +102,7 @@ with st.sidebar:
     
     st.session_state.rag_enabled = st.checkbox("启用智能检索", value=True)
     st.session_state.enable_hyde = st.checkbox("启用查询扩展", value=False)
-    st.session_state.enable_reranking = st.checkbox("启用神经重排序", value=False)
+    st.session_state.enable_reranking = st.checkbox("启用神经重排序", value=True)
     #st.session_state.enable_graph_rag = st.checkbox("启用知识图谱", value=False)
     st.session_state.enable_graph_rag = False  # 🌟 暂时关闭图谱增强
     st.session_state.temperature = st.slider("生成温度", 0.0, 1.0, 0.3, 0.05)
@@ -128,9 +128,6 @@ for message in st.session_state.messages:
             st.markdown(message["content"])
 
 if prompt := st.chat_input("请输入您的问题..."):
-    # 🌟 中文预处理
-    processed_prompt = chinese_text_preprocess(prompt)
-    
     chat_history = "\n".join([msg["content"] for msg in st.session_state.messages[-5:]])
     st.session_state.messages.append({"role": "user", "content": prompt})
     
@@ -153,8 +150,8 @@ if prompt := st.chat_input("请输入您的问题..."):
         # 在检索过程添加日志：
         if st.session_state.rag_enabled and st.session_state.retrieval_pipeline:
             try:
-                logging.info(f"开始文档检索 | 查询：{processed_prompt}")
-                docs = retrieve_documents(processed_prompt, OLLAMA_API_URL, MODEL, chat_history)
+                logging.info(f"开始文档检索 | 查询：{prompt}")
+                docs = retrieve_documents(prompt, OLLAMA_API_URL, MODEL, chat_history)
                 logging.info(f"检索完成 | 获得{docs and len(docs) or 0}条相关文档")
                 context = "\n".join(
                     f"[来源 {i+1}]: {doc.page_content}" 
@@ -177,7 +174,7 @@ if prompt := st.chat_input("请输入您的问题..."):
             # 🌟 增强提示词结构
             system_prompt = f"""基于本地知识库用中文专业地回答，严格遵循步骤：
             【待解决问题】▲
-            用户提问：{processed_prompt} ▲
+            用户提问：{prompt} ▲
             
             【知识库使用原则】▲
             1. 问题解析：明确用户核心诉求与隐含需求
