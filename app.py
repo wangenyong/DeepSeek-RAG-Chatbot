@@ -214,6 +214,34 @@ if prompt := st.chat_input("请输入您的问题..."):
             }
             </style>
             """, unsafe_allow_html=True)
+            
+        thinking_style = """
+            <div style="
+                background: #f8f9fa;
+                border-left: 4px solid #6c757d;
+                padding: 1rem;
+                margin: 1rem 0;
+                border-radius: 4px;
+                color: #495057;
+            ">
+            💡 思考过程：<br>
+            {}
+            </div>
+            """
+
+        answer_style = """
+            <div style="
+                background: #e9f5e9;
+                border: 2px solid #28a745;
+                padding: 1.25rem;
+                margin: 1.5rem 0;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            ">
+            ✅ 最终答案：<br>
+            {}
+            </div>
+            """
         
         full_response = ""
         
@@ -312,25 +340,23 @@ if prompt := st.chat_input("请输入您的问题..."):
                                 token_count += 1
                                 if think_mode == False and "<think>" in token:
                                     logging.info(f"[{current_request_id}] 发现思考标记 | 数据: {token}")
-                                    think_response += replace_placeholder(token)
                                     think_mode = True
+                                    think_response += token
                                 elif think_mode == True and "</think>" in token:
                                     logging.info(f"[{current_request_id}] 结束思考标记 | 数据: {token}")
-                                    think_response += token.split("</think>")[0]
                                     think_mode = False
+                                    think_response += token
                                 elif think_mode == True:
-                                    position = think_response.find("</span>")
-                                    if position != -1:
-                                        think_response = think_response[:position] + token + think_response[position:]
+                                    think_response += token
                                 else:
                                     full_response += token
                         
                                 # 流式更新频率控制（每3个token或0.5秒更新一次）
                                 if token_count % 3 == 0 or (time.time() - start_time) > 0.5:
                                     if think_mode:
-                                        think_placeholder.markdown(think_response + "▌", unsafe_allow_html=True)
+                                        think_placeholder.markdown(thinking_style.format(think_response + "▌"), unsafe_allow_html=True)
                                     else:
-                                        response_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
+                                        response_placeholder.markdown(answer_style.format(full_response + "▌"), unsafe_allow_html=True)
                                     start_time = time.time()
                             
                             # 结束条件判断
@@ -356,8 +382,8 @@ if prompt := st.chat_input("请输入您的问题..."):
         finally:
             # 🌟 最终处理
             if full_response:
-                think_placeholder.markdown(think_response, unsafe_allow_html=True)
-                response_placeholder.markdown(full_response, unsafe_allow_html=True)
+                think_placeholder.markdown(thinking_style.format(think_response), unsafe_allow_html=True)
+                response_placeholder.markdown(answer_style.format(full_response), unsafe_allow_html=True)
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": full_response,
