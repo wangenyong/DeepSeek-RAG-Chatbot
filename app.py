@@ -264,7 +264,7 @@ if prompt := st.chat_input("请输入您的问题..."):
                                     if think_mode:
                                         think_placeholder.markdown(thinking_style.format(think_response + "▌"), unsafe_allow_html=True)
                                     else:
-                                        response_placeholder.markdown(answer_style.format(full_response + "▌"), unsafe_allow_html=True)
+                                        response_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
                                     start_time = time.time()
                             
                             # 结束条件判断
