@@ -80,8 +80,8 @@ if "documents_loaded" not in st.session_state:
 with st.sidebar:
     st.header("📁 文档管理")
     uploaded_files = st.file_uploader(
-        "上传文档（支持PDF/DOCX/TXT）",
-        type=["pdf", "docx", "txt"],
+        "上传文档（支持PDF/DOCX/TXT/EXCEL）",
+        type=["pdf", "docx", "txt", "xls", "xlsx"],
         accept_multiple_files=True
     )
     

@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
@@ -71,6 +72,27 @@ def process_uploaded_files(uploaded_files):
                     logging.info(f"TXT解析完成 | 字符数：{len(docs[0].page_content) if docs else 0}")
                     documents.extend(docs)
                     
+                # 新增Excel处理分支
+                elif file_ext in ('.xls', '.xlsx'):
+                    logging.info(f"开始解析Excel文件 | 文件名：{file_name}")
+                    
+                    # 读取Excel文件
+                    df_dict = pd.read_excel(temp_path, sheet_name=None)
+                    text_content = []
+                    
+                    # 遍历所有工作表
+                    for sheet_name, df in df_dict.items():
+                        sheet_text = [
+                            f"工作表【{sheet_name}】",
+                            "表头：" + ", ".join(df.columns.astype(str)),
+                            "数据：\n" + df.to_string(index=False)
+                        ]
+                        text_content.append("\n".join(sheet_text))
+                    
+                    full_text = "\n\n".join(text_content)
+                    documents.append(Document(page_content=full_text))
+                    logging.info(f"Excel解析完成 | 工作表数：{len(df_dict)} | 总行数：{sum(len(df) for df in df_dict.values())}")
+                    
                 else:
                     logging.warning(f"跳过不支持的文件类型 | 文件名：{file_name}")
                     continue
@@ -106,8 +128,8 @@ def chinese_text_split(documents):
         separator_pattern = "|".join([re.escape(s) for s in separators])
         text_splitter = SpacyTextSplitter(
             pipeline="zh_core_web_sm",
-            chunk_size=500,
-            chunk_overlap=100,
+            chunk_size=800,
+            chunk_overlap=160,
             separator=separator_pattern
         )
         logging.info("使用Spacy语义分割器")
@@ -184,16 +206,15 @@ def process_documents(uploaded_files, reranker, embedding_model, device):
         logging.info(f"混合检索器配置完成 | 权重：BM25(30%) + 向量(70%) | 召回数量：8")
 
         # 知识图谱构建
-        logging.info("开始构建知识图谱")
-        knowledge_graph = build_knowledge_graph(texts)
-        logging.info(f"知识图谱构建完成 | 节点数：{len(knowledge_graph.nodes)} | 边数：{len(knowledge_graph.edges)}")
+        # logging.info("开始构建知识图谱")
+        # knowledge_graph = build_knowledge_graph(texts)
+        # logging.info(f"知识图谱构建完成 | 节点数：{len(knowledge_graph.nodes)} | 边数：{len(knowledge_graph.edges)}")
 
         # 存储会话状态
         st.session_state.retrieval_pipeline = {
             "ensemble": ensemble_retriever,
             "reranker": reranker,
             "texts": text_contents,
-            "knowledge_graph": knowledge_graph
         }
         logging.info("检索管道配置完成")
 
