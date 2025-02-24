@@ -291,7 +291,7 @@ if prompt := st.chat_input("请输入您的问题..."):
             # 🌟 最终处理
             if full_response:
                 think_placeholder.markdown(thinking_style.format(think_response), unsafe_allow_html=True)
-                response_placeholder.markdown(answer_style.format(full_response), unsafe_allow_html=True)
+                response_placeholder.markdown(full_response, unsafe_allow_html=True)
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": full_response,
