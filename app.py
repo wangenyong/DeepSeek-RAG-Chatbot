@@ -122,10 +122,7 @@ with st.sidebar:
 # 对话显示
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        if message["role"] == "assistant":
-            st.markdown(answer_style.format(message["content"]), unsafe_allow_html=True)
-        else:
-            st.markdown(message["content"])
+        st.markdown(message["content"])
 
 if prompt := st.chat_input("请输入您的问题..."):
     chat_history = "\n".join([msg["content"] for msg in st.session_state.messages[-5:]])
