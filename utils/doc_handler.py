@@ -13,15 +13,52 @@ from langchain_huggingface import HuggingFaceEmbeddings
 import pdfplumber  # 更可靠的PDF解析库
 from langchain_community.document_loaders import Docx2txtLoader, TextLoader
 import tempfile
-import spacy
-import re
+# 在顶部导入新增
+from pandas.api.types import is_numeric_dtype
+from tabulate import tabulate
 import logging
-
+import re
 
 # 配置常量
-SUPPORTED_EXT = ['.pdf', '.docx', '.txt']
+SUPPORTED_EXT = ['.pdf', '.docx', '.txt', '.xls', '.xlsx']
 TEMP_DIR = Path("temp")
 TEMP_DIR.mkdir(exist_ok=True, parents=True)  # 确保临时目录存在
+
+def process_excel_sheet(sheet_name: str, df: pd.DataFrame) -> Document:
+    """优化单个工作表的处理逻辑"""
+    # 元数据增强
+    metadata = {
+        "source_type": "excel",
+        "sheet_name": sheet_name,
+        "columns": df.columns.astype(str).tolist(),
+        "dtypes": {col: str(df[col].dtype) for col in df.columns},
+        "shape": f"{len(df)}x{len(df.columns)}"
+    }
+    
+    # 表格内容优化处理
+    table_str = tabulate(
+        df.head(1000),  # 限制最大行数避免内存问题
+        headers='keys',
+        tablefmt='pipe',
+        showindex=False,
+        maxcolwidths=30,
+        stralign="left",
+        numalign="center"
+    )
+    
+    # 结构化文档格式
+    content = f"""
+# EXCEL工作表 [{sheet_name}]
+
+## 元数据
+- 列数: {len(df.columns)}
+- 行数: {len(df)}
+- 列类型: {metadata['dtypes']}
+
+## 数据预览
+{table_str}
+"""
+    return Document(page_content=content.strip(), metadata=metadata)
 
 def process_uploaded_files(uploaded_files):
     """统一处理上传文件的主函数"""
@@ -75,23 +112,41 @@ def process_uploaded_files(uploaded_files):
                 # 新增Excel处理分支
                 elif file_ext in ('.xls', '.xlsx'):
                     logging.info(f"开始解析Excel文件 | 文件名：{file_name}")
-                    
-                    # 读取Excel文件
-                    df_dict = pd.read_excel(temp_path, sheet_name=None)
-                    text_content = []
-                    
-                    # 遍历所有工作表
-                    for sheet_name, df in df_dict.items():
-                        sheet_text = [
-                            f"工作表【{sheet_name}】",
-                            "表头：" + ", ".join(df.columns.astype(str)),
-                            "数据：\n" + df.to_string(index=False)
-                        ]
-                        text_content.append("\n".join(sheet_text))
-                    
-                    full_text = "\n\n".join(text_content)
-                    documents.append(Document(page_content=full_text))
-                    logging.info(f"Excel解析完成 | 工作表数：{len(df_dict)} | 总行数：{sum(len(df) for df in df_dict.values())}")
+                    try:
+                        # 增强的Excel读取参数
+                        df_dict = pd.read_excel(
+                            temp_path,
+                            sheet_name=None,
+                            dtype=str,  # 统一转为字符串避免类型问题
+                            na_filter=False,  # 禁用自动空值过滤
+                            engine='openpyxl' if file_ext == '.xlsx' else None
+                        )
+                        
+                        # 处理每个工作表
+                        sheet_docs = []
+                        for sheet_name, df in df_dict.items():
+                            try:
+                                # 清理列名中的特殊字符
+                                df.columns = [re.sub(r'[\\/:*?"<>|]', '_', str(col)) for col in df.columns]
+                                
+                                # 数值列特殊处理
+                                num_cols = [col for col in df.columns if is_numeric_dtype(df[col])]
+                                if num_cols:
+                                    df[num_cols] = df[num_cols].apply(lambda x: x.round(6))
+                                
+                                # 生成结构化文档
+                                doc = process_excel_sheet(sheet_name, df)
+                                sheet_docs.append(doc)
+                            except Exception as e:
+                                logging.error(f"工作表处理失败 | 文件：{file_name} | 工作表：{sheet_name}", exc_info=True)
+                                continue
+                        
+                        documents.extend(sheet_docs)
+                        logging.info(f"Excel解析完成 | 工作表数：{len(sheet_docs)} | 总行数：{sum(len(df) for df in df_dict.values())}")
+                        
+                    except Exception as e:
+                        logging.error(f"Excel文件解析失败 | 文件名：{file_name}", exc_info=True)
+                        continue
                     
                 else:
                     logging.warning(f"跳过不支持的文件类型 | 文件名：{file_name}")
@@ -117,26 +172,71 @@ def process_uploaded_files(uploaded_files):
     logging.info(f"文件处理完成 | 总处理文件数：{len(uploaded_files)} | 有效文档数：{len(documents)}")
     return documents
 
-def chinese_text_split(documents):
-    logging.info("开始文本分割 | 原始文档数：%d", len(documents))
+def table_aware_splitter(documents: list) -> tuple:
+    """表格感知的文本分割器"""
+    logging.info("开始表格优化分割")
     
-    text_splitter = RecursiveCharacterTextSplitter(
-        separators=["\n\n", "。", "！", "？"],  # 按段落、句子分割
-        chunk_size=800,
-        chunk_overlap=160,
-        is_separator_regex=False  # 明确关闭正则匹配，直接按字符匹配
+    # 动态分割参数
+    table_docs = [doc for doc in documents if doc.metadata.get('source_type') == 'excel']
+    avg_rows = sum(int(doc.metadata['shape'].split('x')[0]) for doc in table_docs) / (len(table_docs) or 1)
+    
+    # 动态调整参数
+    chunk_size = max(800, int(avg_rows * 20))  # 每20行一个块
+    chunk_overlap = min(160, int(chunk_size * 0.2))
+    
+    # 表格专用分割器
+    table_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n## 数据预览", "\n## 元数据", "\n# EXCEL工作表", "\n\n"],
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        is_separator_regex=False
     )
     
-    texts = text_splitter.split_documents(documents)
-    logging.info("初步分割完成 | 块数：%d", len(texts))
+    # 通用分割器
+    text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "。", "！", "？"],
+        chunk_size=800,
+        chunk_overlap=160,
+        is_separator_regex=False
+    )
+    
+    # 分割处理
+    split_docs = []
+    for doc in documents:
+        if doc.metadata.get('source_type') == 'excel':
+            split_docs.extend(table_splitter.split_documents([doc]))
+        else:
+            split_docs.extend(text_splitter.split_documents([doc]))
     
     # 后处理
     text_contents = [
+        doc.page_content.strip()
+        for doc in split_docs
+        if len(doc.page_content.strip()) > 20
+    ]
+    return split_docs, text_contents
+
+def chinese_text_split(documents):
+    logging.info("开始文本分割 | 原始文档数：%d", len(documents))
+    
+    # 检测是否包含表格文档
+    if any(doc.metadata.get('source_type') == 'excel' for doc in documents):
+        return table_aware_splitter(documents)
+    
+    # 原始分割逻辑
+    text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "。", "！", "？"],
+        chunk_size=800,
+        chunk_overlap=160,
+        is_separator_regex=False
+    )
+    
+    texts = text_splitter.split_documents(documents)
+    text_contents = [
         doc.page_content.strip() 
         for doc in texts
-        if len(doc.page_content.strip()) > 20  # 过滤空内容
+        if len(doc.page_content.strip()) > 20
     ]
-    
     return (texts, text_contents)
 
 def process_documents(uploaded_files, reranker, embedding_model, device):
@@ -174,9 +274,14 @@ def process_documents(uploaded_files, reranker, embedding_model, device):
         # BM25检索器
         logging.info("初始化BM25检索器")
         bm25_retriever = BM25Retriever.from_texts(
-            text_contents, 
+            text_contents,
             bm25_impl=BM25Okapi,
-            preprocess_func=lambda text: [word for word in jieba.lcut(text) if word.strip()]
+            preprocess_func=lambda text: [
+                word for word in jieba.lcut(
+                    re.sub(r'\|\s*\n', ' ', text)  # 处理表格换行
+                ) 
+                if word.strip() and word not in {'|', '##', 'EXCEL'}
+            ]
         )
         logging.info(f"BM25检索器就绪 | 文档数：{len(text_contents)}")
 
