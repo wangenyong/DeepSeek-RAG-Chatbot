@@ -138,10 +138,10 @@ def retrieve_documents(query, uri, model, chat_history=""):
         for doc in ranked_docs[:st.session_state.max_contexts]:
             content = doc.page_content
             # 添加中文内容比例阈值控制
-            MIN_CHINESE_RATIO = 0.3  # 至少30%字符是中文
-            chinese_chars = sum(1 for c in content if '\u4e00' <= c <= '\u9fff')
-            if chinese_chars / len(content) < MIN_CHINESE_RATIO:
-                continue
+            # MIN_CHINESE_RATIO = 0.3  # 至少30%字符是中文
+            # chinese_chars = sum(1 for c in content if '\u4e00' <= c <= '\u9fff')
+            # if chinese_chars / len(content) < MIN_CHINESE_RATIO:
+            #     continue
             final_docs.append(doc)
         
         logging.info("结果过滤 | 原始数：%d → 最终数：%d | 过滤比例：%.1f%%",
