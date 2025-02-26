@@ -125,6 +125,7 @@ def process_uploaded_files(uploaded_files):
                         # 处理每个工作表
                         sheet_docs = []
                         for sheet_name, df in df_dict.items():
+                            logging.debug(f"工作表【{sheet_name}】样例数据：\n{df.head(3).to_markdown()}")
                             try:
                                 # 清理列名中的特殊字符
                                 df.columns = [re.sub(r'[\\/:*?"<>|]', '_', str(col)) for col in df.columns]
@@ -172,49 +173,36 @@ def process_uploaded_files(uploaded_files):
     logging.info(f"文件处理完成 | 总处理文件数：{len(uploaded_files)} | 有效文档数：{len(documents)}")
     return documents
 
+
 def table_aware_splitter(documents: list) -> tuple:
-    """表格感知的文本分割器"""
-    logging.info("开始表格优化分割")
-    
-    # 动态分割参数
+    """优化后的表格分块逻辑"""
+    # 动态调整分块大小
     table_docs = [doc for doc in documents if doc.metadata.get('source_type') == 'excel']
-    avg_rows = sum(int(doc.metadata['shape'].split('x')[0]) for doc in table_docs) / (len(table_docs) or 1)
+    avg_cols = sum(len(doc.metadata['columns']) for doc in table_docs) / (len(table_docs) or 1)
     
-    # 动态调整参数
-    chunk_size = max(800, int(avg_rows * 20))  # 每20行一个块
-    chunk_overlap = min(160, int(chunk_size * 0.2))
-    
+    chunk_size = max(800, int(avg_cols * 150))  # 每列约150字符
+    chunk_overlap = min(160, int(chunk_size * 0.3))  # 提高重叠比例
+
     # 表格专用分割器
     table_splitter = RecursiveCharacterTextSplitter(
-        separators=["\n## 数据预览", "\n## 元数据", "\n# EXCEL工作表", "\n\n"],
+        separators=[
+            r'\n## 数据预览\n',  # 保留完整表格
+            r'\n# EXCEL工作表 $$(.*?)$$'  # 按工作表分割
+        ],
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        is_separator_regex=False
+        is_separator_regex=True  # 启用正则表达式
     )
     
-    # 通用分割器
-    text_splitter = RecursiveCharacterTextSplitter(
-        separators=["\n\n", "。", "！", "？"],
-        chunk_size=800,
-        chunk_overlap=160,
-        is_separator_regex=False
-    )
-    
-    # 分割处理
+    # 分块后添加表格标识
     split_docs = []
-    for doc in documents:
-        if doc.metadata.get('source_type') == 'excel':
-            split_docs.extend(table_splitter.split_documents([doc]))
-        else:
-            split_docs.extend(text_splitter.split_documents([doc]))
+    for doc in table_docs:
+        for chunk in table_splitter.split_documents([doc]):
+            chunk.metadata['is_table'] = True
+            split_docs.append(chunk)
     
-    # 后处理
-    text_contents = [
-        doc.page_content.strip()
-        for doc in split_docs
-        if len(doc.page_content.strip()) > 20
-    ]
-    return split_docs, text_contents
+    return split_docs, [doc.page_content for doc in split_docs]
+
 
 def chinese_text_split(documents):
     logging.info("开始文本分割 | 原始文档数：%d", len(documents))
@@ -238,6 +226,15 @@ def chinese_text_split(documents):
         if len(doc.page_content.strip()) > 20
     ]
     return (texts, text_contents)
+
+
+# 修改BM25初始化部分
+def table_tokenizer(text: str) -> list:
+    """表格敏感型分词器"""
+    # 保留数字、货币符号、百分比等
+    tokens = re.findall(r'\d+\.?\d*|[$¥€%]|\w+[\u4e00-\u9fff]', text)
+    return [t.lower() for t in tokens if t.strip()]
+
 
 def process_documents(uploaded_files, reranker, embedding_model, device):
     if st.session_state.documents_loaded:
@@ -276,23 +273,22 @@ def process_documents(uploaded_files, reranker, embedding_model, device):
         bm25_retriever = BM25Retriever.from_texts(
             text_contents,
             bm25_impl=BM25Okapi,
-            preprocess_func=lambda text: [
-                word for word in jieba.lcut(
-                    re.sub(r'\|\s*\n', ' ', text)  # 处理表格换行
-                ) 
-                if word.strip() and word not in {'|', '##', 'EXCEL'}
-            ]
+            preprocess_func=table_tokenizer  # 使用定制分词器
         )
         logging.info(f"BM25检索器就绪 | 文档数：{len(text_contents)}")
 
         # 混合检索器
         logging.info("配置混合检索器")
+        # 在process_documents中修改混合检索器配置
         ensemble_retriever = EnsembleRetriever(
             retrievers=[
                 bm25_retriever,
-                vector_store.as_retriever(search_kwargs={"k": 8})
+                vector_store.as_retriever(search_kwargs={
+                    "k": 12,  # 增加向量召回量
+                    "score_threshold": 0.65  # 降低阈值
+                })
             ],
-            weights=[0.3, 0.7]
+            weights=[0.5, 0.5]  # 平衡权重
         )
         logging.info(f"混合检索器配置完成 | 权重：BM25(30%) + 向量(70%) | 召回数量：8")
 
