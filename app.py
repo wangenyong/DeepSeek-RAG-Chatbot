@@ -144,8 +144,11 @@ if prompt := st.chat_input("请输入您的问题..."):
         
         # 🌟 中文优化上下文构建
         context = ""
-        # 在检索过程添加日志：
-        if st.session_state.rag_enabled and st.session_state.retrieval_pipeline:
+        if is_structured_query(prompt):
+            db_agent = DBAgent()
+            db_result = db_agent.query(prompt)
+            context += f"\n数据库查询结果：{db_result['summary'] if db_result else '无相关数据'}"
+        elif st.session_state.rag_enabled and st.session_state.retrieval_pipeline:
             try:
                 logging.info(f"开始文档检索 | 查询：{prompt}")
                 docs = retrieve_documents(prompt, OLLAMA_API_URL, MODEL, chat_history)

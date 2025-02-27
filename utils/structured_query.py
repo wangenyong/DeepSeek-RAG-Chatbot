@@ -1,65 +1,23 @@
-import logging
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from utils.db_conn import get_db
+import requests
+import os
 
-tokenizer = AutoTokenizer.from_pretrained("tscholak/nl2sql-spider")
-model = AutoModelForSeq2SeqLM.from_pretrained("tscholak/nl2sql-spider")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+OLLAMA_API_URL = f"{OLLAMA_BASE_URL}/api/generate"
+MODEL = os.getenv("MODEL", "deepseek-r1:1.5b")  # 🌟 改用中文模型
 
-def nl2sql_converter(query: str, schema: dict) -> str:
-    inputs = f"question: {query} context: {schema}"
-    input_ids = tokenizer(inputs, return_tensors="pt").input_ids
-    outputs = model.generate(input_ids)
-    return tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-def safe_query_executor(sql: str):
-    # 添加安全限制
-    if "DROP" in sql.upper() or "DELETE" in sql.upper():
-        return "危险操作被阻止"
+def is_structured_query(prompt):
+    # 基于规则的关键词匹配
+    keywords = ['查询', '统计', '数据', '表', '记录', '销售额', '用户数']
+    if any(kw in prompt for kw in keywords):
+        return True
     
-    # 执行查询
-    with get_db() as db:
-        try:
-            result = db.execute(sql).fetchall()
-            return str(result[:10])  # 限制返回结果数量
-        except Exception as e:
-            return f"查询错误: {str(e)}"
-
-def handle_structured_query(query: str) -> str:
-    """处理纯结构化数据查询"""
-    try:
-        # 生成SQL
-        generated_sql = nl2sql_converter(query, get_cached_schema())
-        
-        # 安全执行
-        if validate_sql(generated_sql):
-            result = safe_query_executor(generated_sql)
-            return format_sql_result(result)
-        else:
-            return "SQL验证未通过，请重新表述问题"
-            
-    except Exception as e:
-        logging.error(f"SQL处理失败: {str(e)}")
-        return f"数据库查询错误: {str(e)}"
+    # 使用小型分类模型（示例）
+    classifier_prompt = f"""判断以下问题是否需要查询数据库：
+问题：{prompt}
+答案（只需回答是或否）："""
     
-    
-def handle_hybrid_query(query: str):
-    """处理混合型查询"""
-    from concurrent.futures import ThreadPoolExecutor
-    
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # 并行执行文档检索和SQL生成
-        future_docs = executor.submit(retrieve_documents, query, OLLAMA_API_URL, MODEL, "")
-        future_sql = executor.submit(generate_sql_background, query)
-        
-        docs = future_docs.result(timeout=10)
-        sql_data = future_sql.result(timeout=8)
-    
-    return docs, sql_data
-
-def generate_sql_background(query: str):
-    """后台生成SQL并执行"""
-    try:
-        sql = nl2sql_converter(query, get_cached_schema())
-        return safe_query_executor(sql)
-    except:
-        return None
+    response = requests.post(
+        OLLAMA_API_URL,
+        json={"model": MODEL, "prompt": classifier_prompt, "temperature": 0}
+    )
+    return "是" in response.json()["response"].strip()
