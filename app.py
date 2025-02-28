@@ -148,7 +148,7 @@ if prompt := st.chat_input("请输入您的问题..."):
         if is_structured_query(prompt):
             db_agent = DBAgent()
             db_result = db_agent.query(prompt)
-            context += f"\n数据库查询结果：{db_result['summary'] if db_result else '无相关数据'}"
+            context += f"\n数据库查询结果：{db_result['data'] if db_result else '无相关数据'}"
         elif st.session_state.rag_enabled and st.session_state.retrieval_pipeline:
             try:
                 logging.info(f"开始文档检索 | 查询：{prompt}")
