@@ -1,4 +1,16 @@
 import requests
+import os
+from langchain_community.utilities import SQLDatabase
+from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
+from langchain_community.agent_toolkits import create_sql_agent
+from langchain_community.llms import ollama
+
+# 初始化数据库连接（以 PostgreSQL 为例）
+db = SQLDatabase.from_uri("postgresql://user:password@localhost/mydb")
+
+# 执行 SQL 查询
+result = db.run("SELECT name FROM users LIMIT 5")
+print(result)
 
 DATABASE_URI = "mysql+pymysql://user:password@localhost:3306/dbname?charset=utf8mb4"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
@@ -8,9 +20,9 @@ MODEL = os.getenv("MODEL", "deepseek-r1:1.5b")  # 🌟 改用中文模型
 class DBAgent:
     def __init__(self):
         self.db = SQLDatabase.from_uri(DATABASE_URI)
-        self.toolkit = SQLDatabaseToolkit(db=self.db, llm=Ollama(model=MODEL))
+        self.toolkit = SQLDatabaseToolkit(db=self.db, llm=ollama(model=MODEL))
         self.agent = create_sql_agent(
-            llm=Ollama(model=MODEL),
+            llm=ollama(model=MODEL),
             toolkit=self.toolkit,
             verbose=True,
             handle_parsing_errors=True
