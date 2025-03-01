@@ -6,6 +6,7 @@ OLLAMA_API_URL = f"{OLLAMA_BASE_URL}/api/generate"
 MODEL = os.getenv("MODEL", "deepseek-r1:1.5b")  # 🌟 改用中文模型
 
 def is_structured_query(prompt):
+    return False
     # 基于规则的关键词匹配
     keywords = ['查询', '统计', '数据', '表', '记录', '销售额', '用户数']
     if any(kw in prompt for kw in keywords):
