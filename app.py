@@ -79,7 +79,29 @@ if "documents_loaded" not in st.session_state:
 
 # 🌟 侧边栏汉化
 with st.sidebar:
-    st.header("📁 文档管理")
+    # 调整列布局并添加自定义样式
+    col_title, col_btn = st.columns([2, 1], gap="small")
+    
+    with col_title:
+        st.header("📁 文档管理")
+    
+    with col_btn:
+        # 添加垂直位置调整
+        st.markdown(
+            """<style>
+            div[data-testid="column"]:nth-of-type(2) {
+                padding-top: 8px;
+            }
+            </style>""",
+            unsafe_allow_html=True
+        )
+        st.page_link(
+            "pages/2_📁_文档管理.py",
+            label="跳转", 
+            icon="📂",
+            use_container_width=True
+        )
+    
     uploaded_files = st.file_uploader(
         "上传文档（支持PDF/DOCX/TXT/EXCEL）",
         type=["pdf", "docx", "txt", "xls", "xlsx"],
@@ -196,7 +218,13 @@ if prompt := st.chat_input("请输入您的问题..."):
                     "options": {
                         "temperature": max(0.1, min(st.session_state.temperature, 1.0)),  # 温度值安全限制
                         "num_ctx": 4096,
-                        "stop": ["\n\n\n", "<|endoftext|>"] 
+                        "stop": ["\n\n\n", "</thought>", "<thought>"],
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": ""
+                            }
+                        ]
                     }
                 },
                 stream=True
