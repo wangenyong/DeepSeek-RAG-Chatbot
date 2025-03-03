@@ -277,11 +277,22 @@ def process_documents(uploaded_files, reranker, embedding_model, device):
         else:
             logging.info("创建新的FAISS索引") 
             vector_store = FAISS.from_documents(texts, embeddings)
-            
+
         # 保存更新后的索引
         vector_store.save_local(index_path)
+                 
+        logging.info(f"向量存储创建完成 | 文档数：{vector_store.index.ntotal} | 维度：{vector_store.index.d}")   
+        
+    
+        if (index_path / "bm25_texts.parquet").exists():
+            logging.info("加载已有BM25索引")
+            bm25_texts = pd.read_parquet(index_path / "bm25_texts.parquet")
+            text_contents.extend(bm25_texts)
             
-        logging.info(f"向量存储创建完成 | 文档数：{vector_store.index.ntotal} | 维度：{vector_store.index.d}")
+        logging.info("创建新的BM25索引")
+        bm25_texts = pd.DataFrame({"text": text_contents})
+        bm25_texts.to_parquet(index_path / "bm25_texts.parquet")
+        
 
         # BM25检索器
         logging.info("初始化BM25检索器")
