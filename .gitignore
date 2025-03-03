@@ -4,3 +4,5 @@
 /temp
 /.vscode
 /logs
+
+/data/faiss_index
