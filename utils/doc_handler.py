@@ -265,7 +265,22 @@ def process_documents(uploaded_files, reranker, embedding_model, device):
         
         # 向量存储
         logging.info("创建FAISS向量存储")
-        vector_store = FAISS.from_documents(texts, embeddings)
+        index_path = Path("data/faiss_index")
+        index_path.mkdir(exist_ok=True, parents=True)
+        
+        # 检查是否存在已有索引
+        if (index_path / "index.faiss").exists():
+            logging.info("加载已有FAISS索引")
+            vector_store = FAISS.load_local(index_path, embeddings)
+            logging.info("将新文档添加到现有索引")
+            vector_store.add_documents(texts)
+        else:
+            logging.info("创建新的FAISS索引") 
+            vector_store = FAISS.from_documents(texts, embeddings)
+            
+        # 保存更新后的索引
+        vector_store.save_local(index_path)
+            
         logging.info(f"向量存储创建完成 | 文档数：{vector_store.index.ntotal} | 维度：{vector_store.index.d}")
 
         # BM25检索器
